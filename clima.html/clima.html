@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Clima con Mapa Interactivo</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(to right, #74ebd5, #ACB6E5);
+            color: #333;
+            text-align: center;
+            padding: 40px;
+        }
+
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #1976D2;
+        }
+
+        #weather {
+            margin-top: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        #map {
+            height: 400px;
+            width: 90%;
+            max-width: 800px;
+            margin: 30px auto;
+            border: 2px solid #fff;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Consulta el Clima con Mapa</h1>
+
+    <input type="text" id="cityInput" placeholder="Escribe una ciudad...">
+    <button onclick="getWeather()">Consultar</button>
+
+    <div id="weather"></div>
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+        let map;      // Mapa de Leaflet
+        let marker;   // Marcador actual
+
+        async function getWeather() {
+            const city = document.getElementById("cityInput").value.trim();
+            const weatherDiv = document.getElementById("weather");
+
+            if (!city) {
+                weatherDiv.innerHTML = "<p>Por favor, ingresa una ciudad.</p>";
+                return;
+            }
+
+            weatherDiv.innerHTML = "<p>Buscando clima...</p>";
+
+            try {
+                // Paso 1: Coordenadas con Nominatim
+                const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`);
+                const geoData = await geoRes.json();
+
+                if (!geoData.length) {
+                    weatherDiv.innerHTML = "<p>Ciudad no encontrada.</p>";
+                    return;
+                }
+
+                const lat = parseFloat(geoData[0].lat);
+                const lon = parseFloat(geoData[0].lon);
+                const locationName = geoData[0].display_name;
+
+                // Paso 2: Clima desde Open-Meteo
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+                const weather = weatherData.current_weather;
+
+                const weatherCode = weather.weathercode;
+                const temp = weather.temperature;
+                const wind = weather.windspeed;
+                const weatherDesc = interpretWeatherCode(weatherCode);
+
+                weatherDiv.innerHTML = `
+                    <h2>${locationName}</h2>
+                    <p><strong>Temperatura:</strong> ${temp}°C</p>
+                    <p><strong>Viento:</strong> ${wind} km/h</p>
+                    <p><strong>Condición:</strong> ${weatherDesc}</p>
+                `;
+
+                // Paso 3: Mostrar mapa
+                showMap(lat, lon, locationName);
+
+            } catch (error) {
+                console.error(error);
+                weatherDiv.innerHTML = "<p>Error al obtener el clima.</p>";
+            }
+        }
+
+        function interpretWeatherCode(code) {
+            const codes = {
+                0: "Despejado",
+                1: "Principalmente despejado",
+                2: "Parcialmente nublado",
+                3: "Nublado",
+                45: "Niebla",
+                48: "Niebla con escarcha",
+                51: "Llovizna ligera",
+                53: "Llovizna moderada",
+                55: "Llovizna densa",
+                61: "Lluvia ligera",
+                63: "Lluvia moderada",
+                65: "Lluvia fuerte",
+                71: "Nieve ligera",
+                73: "Nieve moderada",
+                75: "Nieve intensa",
+                80: "Chubascos ligeros",
+                81: "Chubascos moderados",
+                82: "Chubascos intensos",
+                95: "Tormenta eléctrica",
+                96: "Tormenta con granizo leve",
+                99: "Tormenta con granizo fuerte"
+            };
+            return codes[code] || "Desconocido";
+        }
+
+        function showMap(lat, lon, name) {
+            if (!map) {
+                // Crear mapa la primera vez
+                map = L.map('map').setView([lat, lon], 10);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(map);
+
+                marker = L.marker([lat, lon]).addTo(map)
+                    .bindPopup(name)
+                    .openPopup();
+            } else {
+                // Actualizar vista y marcador
+                map.setView([lat, lon], 10);
+                marker.setLatLng([lat, lon])
+                    .setPopupContent(name)
+                    .openPopup();
+            }
+        }
+    </script>
+
+</body>
+</html>
